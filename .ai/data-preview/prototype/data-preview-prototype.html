@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>数据预览 Data Editor 原型</title>
+    <style>
+      :root {
+        --bg: #eef1f5;
+        --panel: #ffffff;
+        --panel-soft: #f7f8fa;
+        --line: #d8dde6;
+        --line-strong: #c6ccd6;
+        --text: #1f2937;
+        --text-soft: #596579;
+        --text-faint: #8a94a6;
+        --blue: #2563eb;
+        --blue-soft: #e8f0ff;
+        --green: #0f766e;
+        --green-soft: #e7f6f2;
+        --null: #eef0f3;
+        --shadow: 0 12px 28px rgba(16, 24, 40, 0.08);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--text);
+        background: var(--bg);
+        font-size: 13px;
+        overflow: hidden;
+      }
+      button, input, select { font: inherit; }
+      button { cursor: pointer; }
+
+      .app {
+        height: 100vh;
+        display: grid;
+        grid-template-rows: 52px minmax(0, 1fr);
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 14px;
+        background: #fbfcfe;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand { display: flex; align-items: center; gap: 8px; min-width: 122px; font-weight: 700; font-size: 14px; }
+      .brand-icon { width: 24px; height: 24px; border-radius: 6px; background: #2f6feb; display: grid; place-items: center; color: #fff; font-weight: 800; }
+      .selectbox { height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; min-width: 176px; }
+      .selectbox select { border: none; background: transparent; color: var(--text); font-weight: 650; outline: none; min-width: 118px; }
+      .table-context { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--text-soft); }
+      .table-context strong { color: var(--text); font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .pill { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-soft); color: var(--text-soft); font-size: 12px; white-space: nowrap; }
+      .btn { height: 32px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+      .btn.primary { border-color: #1d4ed8; background: #2563eb; color: #fff; }
+      .btn.icon { width: 32px; padding: 0; justify-content: center; }
+      .btn:active { transform: translateY(1px); }
+
+      .main { min-height: 0; display: grid; grid-template-columns: var(--sidebar-width, 288px) minmax(0, 1fr); }
+      .main.sidebar-collapsed { grid-template-columns: 42px minmax(0, 1fr); }
+      .sidebar { position: relative; min-width: 0; display: grid; grid-template-rows: 44px 78px minmax(0, 1fr) 34px; border-right: 1px solid var(--line); background: #f8fafc; }
+      .main.sidebar-collapsed .sidebar { grid-template-rows: 44px minmax(0, 1fr); }
+      .main.sidebar-collapsed .tree-search input,
+      .main.sidebar-collapsed .recent,
+      .main.sidebar-collapsed .tree,
+      .main.sidebar-collapsed .sidebar-status { display: none; }
+      .sidebar-toggle { display: none; }
+      .resize-handle { position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
+      .resize-handle:hover, .resizing .resize-handle { background: rgba(37, 99, 235, 0.18); }
+      .main.sidebar-collapsed .resize-handle { right: -4px; width: 8px; }
+      .main.sidebar-collapsed .tree-search { display: flex; align-items: center; justify-content: center; padding: 8px 0; }
+      .tree-search { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+      .tree-search input { width: 100%; height: 28px; border: 1px solid var(--line); border-radius: 6px; padding: 0 9px; background: #fff; color: var(--text); }
+      .recent { padding: 8px 10px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+      .section-title { color: var(--text-faint); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700; }
+      .recent-row { display: flex; align-items: center; gap: 7px; color: var(--text-soft); min-width: 0; }
+      .recent-row span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .tree { overflow: auto; padding: 8px 6px 12px; }
+      .node { min-height: 30px; display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 5px; color: var(--text-soft); user-select: none; }
+      .node.toggle { cursor: pointer; }
+      .node.db { color: var(--text); font-weight: 650; }
+      .node.schema { margin-left: 14px; }
+      .node.group { margin-left: 28px; color: var(--text-faint); }
+      .node.table { margin-left: 42px; align-items: flex-start; min-height: 42px; }
+      .node.table:hover { background: #edf2f7; }
+      .node.active { background: var(--blue-soft); color: #1649b8; box-shadow: inset 3px 0 0 var(--blue); }
+      .node-main { min-width: 0; display: grid; gap: 2px; }
+      .node-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; }
+      .node-desc { color: var(--text-faint); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .sidebar-status { border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 10px; color: var(--text-faint); font-size: 12px; }
+
+      .workspace { min-width: 0; min-height: 0; display: grid; grid-template-rows: 36px 42px auto auto auto minmax(0, 1fr) 38px; background: var(--panel); }
+      .tabs { display: flex; align-items: end; gap: 4px; padding: 0 10px; background: #f4f6f9; border-bottom: 1px solid var(--line); overflow: hidden; }
+      .tab { height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid var(--line); border-bottom: none; border-radius: 6px 6px 0 0; background: #e9edf3; color: var(--text-soft); max-width: 290px; }
+      .tab.active { background: #fff; color: var(--text); }
+      .tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .table-tools { display: flex; align-items: center; gap: 8px; padding: 0 10px; border-bottom: 1px solid var(--line); background: #fff; }
+      .tool-sep { width: 1px; height: 22px; background: var(--line); }
+      .tool-spacer { flex: 1; }
+      .page-size { height: 28px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--text-soft); padding: 0 7px; }
+      .query-line { min-width: 0; display: flex; align-items: center; gap: 8px; padding: 5px 10px; min-height: 38px; border-bottom: 1px solid var(--line); background: #fbfcfe; flex-wrap: wrap; }
+      .query-label { width: 72px; color: #3b4b63; font-weight: 800; font-size: 12px; }
+      .condition-chip { height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #cdd7e5; border-radius: 5px; background: #fff; color: var(--text); white-space: nowrap; }
+      .condition-chip .field { color: #1649b8; font-weight: 650; }
+      .condition-chip .op { color: #6b7280; }
+      .condition-chip .value { color: #087443; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+      .condition-chip .x { color: var(--text-faint); cursor: pointer; }
+      .add-link { color: var(--blue); font-weight: 650; white-space: nowrap; cursor: pointer; }
+
+      .grid-wrap { min-height: 0; overflow: auto; background: #fff; }
+      table.data-grid { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+      .data-grid th, .data-grid td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); height: 34px; padding: 0 9px; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+      .data-grid th { position: sticky; top: 0; z-index: 2; background: #f1f4f8; color: #344054; font-weight: 650; text-align: left; height: 42px; }
+      .row-num, .data-grid th.row-num { position: sticky; left: 0; z-index: 3; width: 54px; min-width: 54px; text-align: right; color: var(--text-faint); background: #f7f8fa; font-variant-numeric: tabular-nums; }
+      .data-grid th.row-num { z-index: 4; }
+      .th-inner { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; }
+      .th-text { min-width: 0; display: grid; gap: 2px; }
+      .th-name { font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .th-comment { color: #7a8699; font-size: 11px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
+      .th-icons { color: #60708a; display: flex; gap: 5px; align-items: center; }
+      .sorted { color: var(--blue); }
+      .filtered { color: var(--green); }
+      .menu-trigger { cursor: pointer; padding: 2px 3px; border-radius: 3px; }
+      .menu-trigger:hover { background: #dde5f0; }
+      .data-grid tr:hover td { background: #f8fbff; }
+      .data-grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
+      .data-grid td.selected { outline: 2px solid var(--blue); outline-offset: -2px; background: #eef5ff; }
+      .data-grid td.hidden-col, .data-grid th.hidden-col { display: none; }
+      .null { color: #6f7785; background: var(--null); border-radius: 4px; padding: 2px 5px; font-size: 12px; }
+      .statusbar { display: flex; align-items: center; gap: 14px; padding: 0 10px; border-top: 1px solid var(--line); background: #f8fafc; color: var(--text-soft); font-size: 12px; }
+      .status-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+      .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #12b76a; }
+      .pager { display: flex; align-items: center; gap: 7px; }
+      .mini-btn { height: 24px; min-width: 26px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--text-soft); display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; cursor: pointer; }
+
+      .drawer { position: fixed; top: 52px; right: 18px; width: 338px; max-height: calc(100vh - 76px); background: #fff; border: 1px solid var(--line-strong); box-shadow: var(--shadow); border-radius: 8px; display: none; grid-template-rows: 42px minmax(0, 1fr) 48px; overflow: hidden; z-index: 10; }
+      .drawer.open { display: grid; }
+      .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--line); font-weight: 700; }
+      .drawer-body { min-height: 0; overflow: auto; padding: 10px 12px; display: grid; gap: 10px; }
+      .drawer-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 12px; border-top: 1px solid var(--line); background: #fbfcfe; }
+      .drawer-search { height: 30px; border: 1px solid var(--line); border-radius: 5px; padding: 0 8px; width: 100%; }
+      .field-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+      .link-btn { border: 1px solid var(--line); background: #fff; color: var(--text-soft); border-radius: 5px; height: 26px; padding: 0 8px; }
+      .field-item { min-height: 34px; display: grid; grid-template-columns: 18px 18px minmax(0, 1fr) 18px auto; gap: 7px; align-items: center; padding: 4px 8px; border: 1px solid transparent; border-radius: 5px; background: #fff; }
+      .field-item:hover { border-color: var(--line); background: #f8fafc; }
+      .field-item.off { opacity: 0.58; }
+      .field-item.dragging { opacity: 0.42; box-shadow: 0 8px 18px rgba(16, 24, 40, 0.16); }
+      .field-item.drag-over { border-color: var(--blue); background: var(--blue-soft); }
+      .drag-handle { color: var(--text-faint); cursor: grab; line-height: 18px; user-select: none; }
+      .drag-handle:active { cursor: grabbing; }
+      .field-main { min-width: 0; display: flex; align-items: baseline; gap: 6px; overflow: hidden; white-space: nowrap; }
+      .field-name { flex: 0 1 auto; min-width: 36px; font-weight: 650; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .field-comment { flex: 1 1 auto; min-width: 0; color: var(--text-faint); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .field-info { width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #d9dee8; border-radius: 50%; color: #667085; font-size: 11px; background: #fff; cursor: help; }
+      .type-badge { font-size: 11px; color: #667085; background: #f2f4f7; border: 1px solid #d9dee8; border-radius: 4px; padding: 1px 5px; max-width: 66px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .form-grid { display: grid; gap: 10px; }
+      .form-field { display: grid; gap: 5px; }
+      .form-field label { color: var(--text-soft); font-size: 12px; font-weight: 650; }
+      .form-input { height: 30px; border: 1px solid var(--line); border-radius: 5px; background: #fff; padding: 0 8px; color: var(--text); width: 100%; }
+      .join-summary { padding: 8px; border: 1px solid #cdd7e5; border-radius: 6px; background: #f8fafc; color: var(--text-soft); line-height: 1.5; }
+      .join-strip { display: none; align-items: center; gap: 8px; min-height: 34px; padding: 5px 10px; border-bottom: 1px solid var(--line); background: var(--green-soft); color: #0f5f56; }
+      .join-strip.show { display: flex; }
+      .join-strip strong { color: #0f5149; }
+      .join-mode-tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; }
+      .join-mode { height: 30px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--text-soft); font-size: 12px; }
+      .join-mode.active { border-color: var(--blue); background: var(--blue-soft); color: #1649b8; font-weight: 650; }
+      .recommend-card { border: 1px solid #cdd7e5; border-radius: 6px; padding: 9px; background: #fff; display: grid; gap: 6px; }
+      .recommend-card.active { border-color: var(--blue); background: #f8fbff; }
+      .recommend-title { font-weight: 700; color: var(--text); }
+      .recommend-meta { color: var(--text-faint); font-size: 12px; }
+      .join-list { display: grid; gap: 8px; }
+      .join-card { border: 1px solid #d8dde6; border-radius: 6px; background: #fff; padding: 8px; display: grid; gap: 8px; }
+      .join-card-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+      .join-card-title { font-weight: 700; }
+      .lookup-step { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; align-items: start; }
+      .step-no { width: 20px; height: 20px; border-radius: 50%; background: var(--blue-soft); color: #1649b8; display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+      .path-card { border: 1px solid #d8dde6; border-radius: 6px; background: #fff; padding: 8px; display: grid; gap: 5px; cursor: pointer; }
+      .path-card.active { border-color: var(--blue); background: #f8fbff; }
+      .join-fields { display: grid; gap: 6px; }
+      .join-field { min-height: 30px; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 4px 7px; border-radius: 5px; }
+      .join-field:hover { background: #f8fafc; }
+      .join-field-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+      .joined-col { background: #edfdf8 !important; }
+
+      .context-menu { position: fixed; display: none; width: 188px; background: #fff; border: 1px solid var(--line-strong); border-radius: 7px; box-shadow: var(--shadow); padding: 5px; z-index: 20; }
+      .context-menu.open { display: block; }
+      .menu-item { height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 5px; color: var(--text); cursor: pointer; }
+      .menu-item:hover, .menu-item.active { background: var(--blue-soft); color: #1649b8; }
+      .popover { position: fixed; display: none; width: 360px; background: #fff; border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow); z-index: 25; overflow: hidden; }
+      .popover.open { display: block; }
+      .popover-head { height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--line); font-weight: 700; }
+      .popover-body { padding: 12px; display: grid; gap: 10px; }
+      .popover-actions { height: 46px; display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 0 12px; border-top: 1px solid var(--line); background: #fbfcfe; }
+      .sort-row { display: grid; grid-template-columns: minmax(0, 1fr) 92px 28px; gap: 7px; align-items: center; }
+      .toast { position: fixed; left: 50%; bottom: 54px; transform: translateX(-50%); background: #101828; color: #fff; border-radius: 6px; padding: 9px 13px; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: 0.18s ease; z-index: 30; }
+      .toast.show { opacity: 1; }
+
+      @media (max-width: 1100px) {
+        .main { grid-template-columns: 240px minmax(0, 1fr); }
+        .selectbox { min-width: 132px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand"><div class="brand-icon">D</div><span>数据预览</span></div>
+        <div class="selectbox">数据源&nbsp;<select id="datasourceSelect" aria-label="选择数据源"></select></div>
+        <div class="selectbox">数据库&nbsp;<select id="databaseSelect" aria-label="选择数据库"></select></div>
+        <div class="table-context">
+          <span>当前表</span>
+          <strong id="currentTableTitle">ajxx_tab（案件信息表）</strong>
+          <span class="pill" id="fieldCount">10 字段</span>
+          <span class="pill" id="filterCount">2 筛选</span>
+          <span class="pill" id="sortCount">1 排序</span>
+        </div>
+        <button class="btn primary" id="queryBtn">▶ 查询</button>
+        <button class="btn" id="refreshBtn">刷新</button>
+        <button class="btn" id="exportBtn">导出</button>
+        <button class="btn" id="saveViewBtn">保存视图</button>
+        <button class="btn icon">⋯</button>
+      </header>
+
+      <main class="main" id="mainLayout">
+        <aside class="sidebar">
+          <div class="tree-search"><input id="treeSearch" placeholder="搜索表名或注释" value="案件" /></div>
+          <div class="recent">
+            <div class="section-title">最近打开</div>
+            <div class="recent-row"><span>▦</span><span>ajxx_tab · 案件信息表</span></div>
+            <div class="recent-row"><span>▦</span><span>case_flow_log · 案件流转日志</span></div>
+          </div>
+          <div class="tree" id="tree">
+            <div class="node db">▾ 🛢 mysql_case_workbench</div>
+            <div class="node schema">▾ 📁 ds_demo</div>
+            <div class="node group">▾ 表</div>
+            <div class="node table active" data-table="ajxx_tab" data-comment="案件信息表">
+              <span>▦</span><div class="node-main"><div class="node-name">ajxx_tab</div><div class="node-desc">案件信息表</div></div>
+            </div>
+            <div class="node table" data-table="case_flow_log" data-comment="案件流转日志">
+              <span>▦</span><div class="node-main"><div class="node-name">case_flow_log</div><div class="node-desc">案件流转日志</div></div>
+            </div>
+            <div class="node table" data-table="user_info" data-comment="用户基础信息">
+              <span>▦</span><div class="node-main"><div class="node-name">user_info</div><div class="node-desc">用户基础信息</div></div>
+            </div>
+            <div class="node table" data-table="dept_dict" data-comment="部门字典表">
+              <span>▦</span><div class="node-main"><div class="node-name">dept_dict</div><div class="node-desc">部门字典表</div></div>
+            </div>
+            <div class="node group">▸ 视图</div>
+            <div class="node schema">▸ 📁 archive_db</div>
+            <div class="node db">▸ 🛢 pgsql_test1</div>
+            <div class="node db">▸ 🛢 ods_sync_target</div>
+          </div>
+          <div class="sidebar-status"><span>已加载 42 张表</span><span id="treeReload">刷新</span></div>
+          <div class="resize-handle" id="sidebarResize" title="拖拽调整左侧宽度"></div>
+        </aside>
+
+        <section class="workspace">
+          <div class="tabs"><div class="tab active"><span id="activeTab">ajxx_tab 案件信息表 · ds_demo</span><b>×</b></div><div class="tab"><span>case_flow_log</span><b>×</b></div></div>
+          <div class="table-tools">
+            <button class="btn icon" id="reloadIcon">↻</button>
+            <button class="btn" id="columnBtn">列设置</button>
+            <button class="btn" id="addFilterBtn">筛选</button>
+            <button class="btn" id="addSortBtn">排序</button>
+            <button class="btn" id="joinBtn">关联</button>
+            <button class="btn" id="copyWhereBtn">复制SQL</button>
+            <div class="tool-spacer"></div>
+            <select class="page-size" id="pageSize"><option>50 条/页</option><option>100 条/页</option><option>200 条/页</option></select>
+          </div>
+          <div class="query-line" id="whereLine"><div class="query-label">WHERE</div><span class="add-link" id="addWhereLink">+ 条件</span></div>
+          <div class="query-line" id="orderLine"><div class="query-label">ORDER BY</div><span class="add-link" id="addOrderLink">+ 排序</span></div>
+          <div class="join-strip" id="joinStrip"><strong>JOIN</strong><span id="joinStripText">LEFT JOIN dept_dict ON ajxx_tab.owner_dept = dept_dict.dept_name</span><button class="link-btn" id="joinStripClear">清除</button></div>
+
+          <div class="grid-wrap">
+            <table class="data-grid" id="dataGrid">
+              <thead><tr id="gridHead"><th class="row-num">#</th></tr></thead>
+              <tbody id="gridBody"></tbody>
+            </table>
+          </div>
+
+          <div class="statusbar">
+            <div class="status-left"><span class="status-dot"></span><span id="rowStatus">返回 50 行</span><span>总计 1,284 行</span><span id="costStatus">耗时 0.38s</span><span id="refreshStatus">上次刷新 14:32:08</span><span id="pathStatus">mysql_case_workbench / ds_demo / ajxx_tab</span></div>
+            <div class="pager"><span class="mini-btn" id="prevPage">‹</span><span id="pageStatus">第 1 / 26 页</span><span class="mini-btn" id="nextPage">›</span><span class="mini-btn" id="jumpPage">跳页</span></div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="drawer open" id="drawer">
+        <div class="drawer-head"><span id="drawerTitle">列设置</span><span id="drawerClose" style="cursor:pointer">×</span></div>
+        <div class="drawer-body" id="drawerBody">
+          <input class="drawer-search" id="fieldSearch" placeholder="搜索字段名或注释" />
+          <div class="field-tools"><button class="link-btn" id="selectAllFields">全选</button><button class="link-btn" id="invertFields">反选</button><button class="link-btn" id="clearFields">清空</button><button class="link-btn" id="resetFields">恢复默认</button></div>
+          <div id="fieldList"></div>
+        </div>
+        <div class="drawer-actions" id="drawerActions"><button class="btn" id="cancelDrawer">取消</button><button class="btn primary" id="applyDrawer">应用</button></div>
+      </aside>
+
+      <div class="context-menu" id="contextMenu"></div>
+      <div class="popover" id="filterPopover"></div>
+      <div class="popover" id="sortPopover"></div>
+      <div class="toast" id="toast">已更新</div>
+    </div>
+
+    <script>
+      const columns = [
+        { key: 'id', name: 'id', comment: '主键 ID', fullComment: '主键 ID，用于唯一标识案件记录', type: 'bigint', visible: true, width: 118, numeric: true },
+        { key: 'case_no', name: 'case_no', comment: '案件编号', fullComment: '案件编号，业务侧用于检索和关联的唯一编号', type: 'varchar', visible: true, width: 158 },
+        { key: 'case_name', name: 'case_name', comment: '案件名称', fullComment: '案件名称，可能包含较长的业务描述，需要在表头中省略展示', type: 'varchar', visible: true, width: 170 },
+        { key: 'status', name: 'status', comment: '案件当前处理状态', fullComment: '案件当前处理状态，常用于筛选有效、无效、待确认等记录', type: 'varchar', visible: true, width: 162 },
+        { key: 'city', name: 'city', comment: '所属城市', fullComment: '案件所属城市或区域', type: 'varchar', visible: true, width: 128 },
+        { key: 'amount', name: 'amount', comment: '涉案金额', fullComment: '涉案金额，单位为人民币元', type: 'decimal', visible: true, width: 128, numeric: true },
+        { key: 'create_time', name: 'create_time', comment: '创建时间，记录首次入库时间', fullComment: '创建时间，记录该案件首次进入当前系统的时间', type: 'datetime', visible: true, width: 198 },
+        { key: 'owner_dept', name: 'owner_dept', comment: '负责部门', fullComment: '负责处理该案件的业务部门或数据治理团队', type: 'varchar', visible: true, width: 172 },
+        { key: 'remark', name: 'remark', comment: '备注说明，内容可能很长', fullComment: '备注说明，可能包含同步校验结果、业务补充说明、异常排查记录等长文本', type: 'text', visible: true, width: 288 },
+        { key: 'update_user', name: 'update_user', comment: '最后更新人', fullComment: '最后一次更新该记录的用户', type: 'varchar', visible: false, width: 150 }
+      ];
+
+      const datasourceCatalog = {
+        mysql_case_workbench: {
+          label: 'mysql_case_workbench',
+          databases: {
+            ds_demo: [
+              { table: 'ajxx_tab', comment: '案件信息表' },
+              { table: 'case_flow_log', comment: '案件流转日志' },
+              { table: 'user_info', comment: '用户基础信息' },
+              { table: 'dept_dict', comment: '部门字典表' }
+            ],
+            ods_case: [
+              { table: 'ods_ajxx_tab', comment: 'ODS 案件信息表' },
+              { table: 'ods_case_detail', comment: 'ODS 案件明细表' }
+            ],
+            dim_common: [
+              { table: 'dim_dept', comment: '部门维表' },
+              { table: 'dim_region', comment: '区域维表' }
+            ]
+          }
+        },
+        pgsql_test1: {
+          label: 'pgsql_test1',
+          databases: {
+            public: [
+              { table: 'customer_profile', comment: '客户画像表' },
+              { table: 'order_snapshot', comment: '订单快照表' }
+            ],
+            ods_sync: [
+              { table: 'sync_run_log', comment: '同步运行日志' },
+              { table: 'sync_error_rows', comment: '同步异常数据' }
+            ]
+          }
+        },
+        ods_sync_target: {
+          label: 'ods_sync_target',
+          databases: {
+            target_demo: [
+              { table: 'ajxx_tab_sync', comment: '案件同步目标表' },
+              { table: 'user_info_sync', comment: '用户同步目标表' }
+            ],
+            quality_check: [
+              { table: 'row_count_check', comment: '行数校验结果' },
+              { table: 'field_diff_check', comment: '字段差异校验' }
+            ]
+          }
+        }
+      };
+
+      let currentDatasource = 'mysql_case_workbench';
+      let currentDatabase = 'ds_demo';
+      let currentTable = 'ajxx_tab';
+      let currentTableComment = '案件信息表';
+
+      const baseColumnKeys = columns.map(col => col.key);
+      const joinFieldOptions = [
+        { key: 'dept_dict.dept_code', name: 'dept_dict.dept_code', comment: '部门编码', fullComment: '关联部门字典表中的部门编码', type: 'varchar', visible: true, width: 160 },
+        { key: 'dept_dict.dept_manager', name: 'dept_dict.dept_manager', comment: '部门负责人', fullComment: '关联部门字典表中的部门负责人', type: 'varchar', visible: true, width: 160 },
+        { key: 'dept_dict.region', name: 'dept_dict.region', comment: '所属区域', fullComment: '关联部门字典表中的区域归属', type: 'varchar', visible: false, width: 150 },
+        { key: 'region_dict.region_level', name: 'region_dict.region_level', comment: '区域等级', fullComment: '关联区域字典中的城市区域等级', type: 'varchar', visible: true, width: 160 },
+        { key: 'region_dict.area_manager', name: 'region_dict.area_manager', comment: '区域负责人', fullComment: '关联区域字典中的区域负责人', type: 'varchar', visible: true, width: 170 }
+      ];
+
+      const deptDict = {
+        '数据治理一组': { dept_code: 'DG-001', dept_manager: '周敏', region: '华东' },
+        '同步平台组': { dept_code: 'SYNC-002', dept_manager: '陈远', region: '华东' },
+        '客户数据组': { dept_code: 'CD-003', dept_manager: '李倩', region: '华中' },
+        '平台运维组': { dept_code: 'OPS-004', dept_manager: '王磊', region: '华南' },
+        '质量保障组': { dept_code: 'QA-005', dept_manager: '赵宁', region: '华东' },
+        '业务支持组': { dept_code: 'BS-006', dept_manager: '孙航', region: '华北' }
+      };
+
+      const regionDict = {
+        '杭州': { region_level: '核心城市', area_manager: '林舟' },
+        '上海': { region_level: '核心城市', area_manager: '许宁' },
+        '南京': { region_level: '重点城市', area_manager: '马岩' },
+        '深圳': { region_level: '核心城市', area_manager: '罗晨' },
+        '苏州': { region_level: '重点城市', area_manager: '沈悦' },
+        '合肥': { region_level: '成长城市', area_manager: '戴琪' },
+        '北京': { region_level: '核心城市', area_manager: '韩旭' },
+        '广州': { region_level: '核心城市', area_manager: '唐佳' }
+      };
+
+      const rows = [
+        { id: 10001, case_no: 'AJ-202605-0001', case_name: '合同资料核验', status: '有效', city: '杭州', amount: '2,300.00', create_time: '2026-05-12 09:42:18', owner_dept: '数据治理一组', remark: '已完成源端校验，等待业务确认', update_user: 'admin' },
+        { id: 10002, case_no: 'AJ-202605-0002', case_name: '同步结果抽查', status: '有效', city: '上海', amount: '880.50', create_time: '2026-05-12 09:18:47', owner_dept: '同步平台组', remark: '目标表字段数与源端一致', update_user: 'luwang' },
+        { id: 10003, case_no: 'AJ-202605-0003', case_name: '客户主数据复核', status: '有效', city: '南京', amount: '1,128.00', create_time: '2026-05-12 08:55:04', owner_dept: '客户数据组', remark: null, update_user: 'system' },
+        { id: 10004, case_no: 'AJ-202605-0004', case_name: '异常状态排查', status: '有效', city: '深圳', amount: '453.20', create_time: '2026-05-11 18:21:39', owner_dept: '平台运维组', remark: '通过单元格右键可仅看此值或排除此值', update_user: 'ops' },
+        { id: 10005, case_no: 'AJ-202605-0005', case_name: '审批链路核对', status: '有效', city: '苏州', amount: '3,010.00', create_time: '2026-05-11 16:42:11', owner_dept: '数据治理一组', remark: 'ORDER BY 条件由表头排序同步生成', update_user: 'admin' },
+        { id: 10006, case_no: 'AJ-202605-0006', case_name: '历史数据比对', status: '有效', city: '杭州', amount: '760.00', create_time: '2026-05-11 15:10:02', owner_dept: '同步平台组', remark: 'WHERE 条件贴近表格便于理解当前结果', update_user: 'tester' },
+        { id: 10007, case_no: 'AJ-202605-0007', case_name: '字段完整性确认', status: '有效', city: '合肥', amount: '99.90', create_time: '2026-05-11 14:39:51', owner_dept: '质量保障组', remark: '列设置抽屉用于隐藏字段、调整顺序和固定列', update_user: 'qa' },
+        { id: 10008, case_no: 'AJ-202605-0008', case_name: '导出数据确认', status: '有效', city: '北京', amount: '1,020.00', create_time: '2026-05-11 12:24:08', owner_dept: '业务支持组', remark: '导出应遵循当前字段、筛选和排序配置', update_user: 'support' },
+        { id: 10009, case_no: 'AJ-202605-0009', case_name: '权限范围检查', status: '有效', city: '广州', amount: '642.00', create_time: '2026-05-11 11:06:44', owner_dept: '平台运维组', remark: '无权限表需要展示可修复提示', update_user: 'ops' },
+        { id: 10010, case_no: 'AJ-202605-0010', case_name: '分页结果核验', status: '有效', city: '杭州', amount: '5,800.00', create_time: '2026-05-11 10:18:23', owner_dept: '数据治理一组', remark: '底部状态栏展示行数、耗时、刷新时间', update_user: 'admin' }
+      ];
+
+      let filters = [
+        { field: 'status', op: '=', value: '有效' },
+        { field: 'create_time', op: '>=', value: '2026-05-01' }
+      ];
+      let sorts = [{ field: 'create_time', dir: 'DESC' }];
+      let page = 1;
+      let contextCell = null;
+      let draggedFieldKey = null;
+      let joinApplied = false;
+      let joinMode = 'manual';
+      let manualJoinCards = [
+        { id: 1, table: 'dept_dict', title: '部门字典', mainField: 'owner_dept', targetField: 'dept_name', type: 'LEFT' }
+      ];
+      let editingFilterIndex = null;
+      let sidebarCollapsed = false;
+      let sidebarWidth = 288;
+      const treeOpenState = { datasource: true, database: true, tables: true, views: false };
+
+      const $ = (id) => document.getElementById(id);
+
+      function toast(text) {
+        const el = $('toast');
+        el.textContent = text;
+        el.classList.add('show');
+        setTimeout(() => el.classList.remove('show'), 1300);
+      }
+
+      function visibleFieldOptions(selected) {
+        return columns
+          .filter(col => col.visible)
+          .map(col => `<option value="${col.key}" ${col.key === selected ? 'selected' : ''}>${col.name} · ${col.comment}</option>`)
+          .join('');
+      }
+
+      function operatorOptions(selected) {
+        return ['=', '!=', '包含', '不包含', '>', '>=', '<', '<=', '为空', '不为空']
+          .map(op => `<option value="${op}" ${op === selected ? 'selected' : ''}>${op}</option>`)
+          .join('');
+      }
+
+      function placePopover(popover, anchor) {
+        const rect = anchor.getBoundingClientRect();
+        popover.style.left = `${Math.min(rect.left, window.innerWidth - 380)}px`;
+        popover.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - 320)}px`;
+        popover.classList.add('open');
+      }
+
+      function renderConditions() {
+        const whereLine = $('whereLine');
+        whereLine.innerHTML = '<div class="query-label">WHERE</div>';
+        if (!filters.length) {
+          const empty = document.createElement('span');
+          empty.className = 'condition-chip';
+          empty.innerHTML = '<span class="op">无筛选条件</span>';
+          whereLine.appendChild(empty);
+        }
+        filters.forEach((f, idx) => {
+          const chip = document.createElement('div');
+          chip.className = 'condition-chip';
+          chip.dataset.editFilterIndex = idx;
+          chip.innerHTML = `<span class="field">${f.field}</span><span class="op">${f.op}</span><span class="value">'${f.value}'</span><span class="x" data-filter-index="${idx}">×</span>`;
+          whereLine.appendChild(chip);
+        });
+        const add = document.createElement('span');
+        add.className = 'add-link';
+        add.textContent = '+ 条件';
+        add.onclick = (event) => openFilterPopover(event.currentTarget);
+        whereLine.appendChild(add);
+
+        const orderLine = $('orderLine');
+        orderLine.innerHTML = '<div class="query-label">ORDER BY</div>';
+        if (!sorts.length) {
+          const empty = document.createElement('span');
+          empty.className = 'condition-chip';
+          empty.innerHTML = '<span class="op">无排序条件</span>';
+          orderLine.appendChild(empty);
+        }
+        sorts.forEach((s, idx) => {
+          const chip = document.createElement('div');
+          chip.className = 'condition-chip';
+          chip.innerHTML = `<span class="field">${s.field}</span><span class="op">${s.dir}</span><span class="pill">${idx + 1}</span><span class="x" data-sort-index="${idx}">×</span>`;
+          orderLine.appendChild(chip);
+        });
+        const addSort = document.createElement('span');
+        addSort.className = 'add-link';
+        addSort.textContent = '+ 排序';
+        addSort.onclick = (event) => openSortPopover(event.currentTarget);
+        orderLine.appendChild(addSort);
+
+        $('filterCount').textContent = `${filters.length} 筛选`;
+        $('sortCount').textContent = `${sorts.length} 排序`;
+        const existingJoin = document.getElementById('joinCount');
+        if (existingJoin) existingJoin.remove();
+        if (joinApplied) {
+          const chip = document.createElement('span');
+          chip.className = 'pill';
+          chip.id = 'joinCount';
+          chip.textContent = '1 关联';
+          $('sortCount').after(chip);
+        }
+      }
+
+      function renderDatasourceSelectors() {
+        $('datasourceSelect').innerHTML = Object.keys(datasourceCatalog)
+          .map(key => `<option value="${key}" ${key === currentDatasource ? 'selected' : ''}>${datasourceCatalog[key].label}</option>`)
+          .join('');
+        const dbs = Object.keys(datasourceCatalog[currentDatasource].databases);
+        if (!dbs.includes(currentDatabase)) currentDatabase = dbs[0];
+        $('databaseSelect').innerHTML = dbs
+          .map(db => `<option value="${db}" ${db === currentDatabase ? 'selected' : ''}>${db}</option>`)
+          .join('');
+      }
+
+      function renderObjectTree() {
+        const tables = datasourceCatalog[currentDatasource].databases[currentDatabase] || [];
+        const tableNodes = treeOpenState.datasource && treeOpenState.database && treeOpenState.tables ? tables.map((item, index) => `
+          <div class="node table ${item.table === currentTable ? 'active' : ''}" data-table="${item.table}" data-comment="${item.comment}">
+            <span>▦</span><div class="node-main"><div class="node-name">${item.table}</div><div class="node-desc">${item.comment}</div></div>
+          </div>`).join('') : '';
+        const databaseNodes = treeOpenState.datasource ? `
+          <div class="node schema toggle" data-tree-toggle="database">${treeOpenState.database ? '▾' : '▸'} 📁 ${currentDatabase}</div>
+          ${treeOpenState.database ? `<div class="node group toggle" data-tree-toggle="tables">${treeOpenState.tables ? '▾' : '▸'} 表</div>${tableNodes}<div class="node group toggle" data-tree-toggle="views">${treeOpenState.views ? '▾' : '▸'} 视图</div>${treeOpenState.views ? '<div class="node table"><span>▤</span><div class="node-main"><div class="node-name">v_case_summary</div><div class="node-desc">案件汇总视图</div></div></div>' : ''}` : ''}
+        ` : '';
+        $('tree').innerHTML = `
+          <div class="node db toggle" data-tree-toggle="datasource">${treeOpenState.datasource ? '▾' : '▸'} 🛢 ${currentDatasource}</div>
+          ${databaseNodes}`;
+        $('tree').nextElementSibling.querySelector('span').textContent = `已加载 ${tables.length} 张表`;
+      }
+
+      function setCurrentTable(table, comment) {
+        currentTable = table;
+        currentTableComment = comment;
+        $('currentTableTitle').textContent = `${table}（${comment}）`;
+        $('activeTab').textContent = `${table} ${comment} · ${currentDatabase}`;
+        $('pathStatus').textContent = `${currentDatasource} / ${currentDatabase} / ${table}`;
+      }
+
+      function refreshCatalogContext() {
+        const tables = datasourceCatalog[currentDatasource].databases[currentDatabase] || [];
+        const first = tables[0];
+        if (first && !tables.some(item => item.table === currentTable)) {
+          setCurrentTable(first.table, first.comment);
+        } else {
+          setCurrentTable(currentTable, currentTableComment);
+        }
+        renderDatasourceSelectors();
+        renderObjectTree();
+        page = 1;
+        $('pageStatus').textContent = `第 ${page} / 26 页`;
+      }
+
+      function getCellValue(row, key) {
+        if (key.startsWith('region_dict.')) {
+          const regionRow = regionDict[row.city] || {};
+          return regionRow[key.replace('region_dict.', '')] ?? null;
+        }
+        if (!key.startsWith('dept_dict.')) return row[key];
+        const deptRow = deptDict[row.owner_dept] || {};
+        return deptRow[key.replace('dept_dict.', '')] ?? null;
+      }
+
+      function renderGrid() {
+        const head = $('gridHead');
+        head.innerHTML = '<th class="row-num">#</th>';
+        columns.forEach((col) => {
+          if (!col.visible) return;
+          const sort = sorts.find(s => s.field === col.key);
+          const filtered = filters.some(f => f.field === col.key);
+          const th = document.createElement('th');
+          th.style.minWidth = `${col.width}px`;
+          th.dataset.key = col.key;
+          if (col.key.includes('_dict.')) th.classList.add('joined-col');
+          th.title = `${col.name}\n${col.fullComment}\n类型：${col.type}`;
+          th.innerHTML = `<div class="th-inner"><div class="th-text"><span class="th-name">${col.name}</span><span class="th-comment">${col.comment}</span></div><span class="th-icons"><span class="${filtered ? 'filtered' : ''}">${filtered ? '⌕' : ''}</span><span class="${sort ? 'sorted' : ''}">${sort ? (sort.dir === 'DESC' ? '↓' : '↑') : ''}</span><span class="menu-trigger" data-key="${col.key}">⋮</span></span></div>`;
+          th.addEventListener('click', (event) => {
+            if (event.target.classList.contains('menu-trigger')) return;
+            setSort(col.key);
+          });
+          head.appendChild(th);
+        });
+
+        const body = $('gridBody');
+        body.innerHTML = '';
+        rows.forEach((row, rowIndex) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="row-num">${rowIndex + 1 + (page - 1) * 50}</td>`;
+          columns.forEach((col) => {
+            if (!col.visible) return;
+            const td = document.createElement('td');
+            td.dataset.key = col.key;
+            td.dataset.value = getCellValue(row, col.key) ?? '';
+            if (col.key.includes('_dict.')) td.classList.add('joined-col');
+            if (col.numeric) td.classList.add('num');
+            const value = getCellValue(row, col.key);
+            td.innerHTML = value === null ? '<span class="null">NULL</span>' : String(value);
+            td.title = value === null ? 'NULL' : String(value);
+            td.addEventListener('click', () => selectCell(td));
+            td.addEventListener('dblclick', () => toast(`完整内容：${value === null ? 'NULL' : value}`));
+            td.addEventListener('contextmenu', (event) => openCellMenu(event, td));
+            tr.appendChild(td);
+          });
+          body.appendChild(tr);
+        });
+        $('fieldCount').textContent = `${columns.filter(c => c.visible).length} 字段`;
+      }
+
+      function renderFieldList() {
+        const keyword = $('fieldSearch').value.trim().toLowerCase();
+        const list = $('fieldList');
+        list.innerHTML = '';
+        columns
+          .filter(col => !keyword || col.name.toLowerCase().includes(keyword) || col.comment.includes(keyword) || col.fullComment.includes(keyword))
+          .forEach((col) => {
+            const item = document.createElement('div');
+            item.className = `field-item ${col.visible ? '' : 'off'}`;
+            item.draggable = keyword === '';
+            item.dataset.fieldKey = col.key;
+            item.title = keyword ? '清空搜索后可拖拽调整字段顺序' : '拖拽调整字段显示顺序';
+            item.innerHTML = `<span class="drag-handle">⋮⋮</span><input type="checkbox" ${col.visible ? 'checked' : ''} data-field="${col.key}" /><div class="field-main" title="${col.name}：${col.fullComment}"><span class="field-name">${col.name}</span><span class="field-comment">${col.comment}</span></div><span class="field-info" title="${col.fullComment}\n类型：${col.type}">i</span><span class="type-badge" title="字段类型：${col.type}">${col.type}</span>`;
+            list.appendChild(item);
+          });
+      }
+
+      function renderColumnDrawer() {
+        $('drawerTitle').textContent = '列设置';
+        $('drawerBody').innerHTML = `
+          <input class="drawer-search" id="fieldSearch" placeholder="搜索字段名或注释" />
+          <div class="field-tools"><button class="link-btn" id="selectAllFields">全选</button><button class="link-btn" id="invertFields">反选</button><button class="link-btn" id="clearFields">清空</button><button class="link-btn" id="resetFields">恢复默认</button></div>
+          <div id="fieldList"></div>`;
+        $('drawerActions').innerHTML = '<button class="btn" id="cancelDrawer">取消</button><button class="btn primary" id="applyDrawer">应用</button>';
+        bindColumnDrawerEvents();
+        renderFieldList();
+        $('drawer').classList.add('open');
+      }
+
+      function renderJoinDrawer() {
+        $('drawerTitle').textContent = '关联表';
+        const renderManualCard = (card, idx) => `
+          <div class="join-card" data-join-card="${card.id}">
+            <div class="join-card-head">
+              <span class="join-card-title">关联 ${idx + 1}：${card.title}</span>
+              <button class="link-btn" type="button" data-remove-join="${card.id}">删除</button>
+            </div>
+            <div class="form-grid">
+              <div class="form-field"><label>关联表</label><select class="form-input" data-join-select="table" data-card-id="${card.id}"><option value="dept_dict" ${card.table === 'dept_dict' ? 'selected' : ''}>dept_dict（部门字典表）</option><option value="region_dict" ${card.table === 'region_dict' ? 'selected' : ''}>region_dict（区域字典表）</option></select></div>
+              <div class="form-field"><label>主表字段</label><select class="form-input" data-join-select="mainField" data-card-id="${card.id}"><option value="owner_dept" ${card.mainField === 'owner_dept' ? 'selected' : ''}>owner_dept（负责部门）</option><option value="city" ${card.mainField === 'city' ? 'selected' : ''}>city（所属城市）</option></select></div>
+              <div class="form-field"><label>关联表字段</label><select class="form-input" data-join-select="targetField" data-card-id="${card.id}"><option value="dept_name" ${card.targetField === 'dept_name' ? 'selected' : ''}>dept_name（部门名称）</option><option value="city_name" ${card.targetField === 'city_name' ? 'selected' : ''}>city_name（城市名称）</option></select></div>
+              <div class="form-field"><label>关联类型</label><select class="form-input" data-join-select="type" data-card-id="${card.id}"><option value="LEFT" ${card.type === 'LEFT' ? 'selected' : ''}>左连接 LEFT JOIN</option><option value="INNER" ${card.type === 'INNER' ? 'selected' : ''}>内连接 INNER JOIN</option></select></div>
+            </div>
+          </div>`;
+        const bodyByMode = {
+          manual: `
+            <div class="join-list">
+              ${manualJoinCards.map(renderManualCard).join('')}
+              <button class="link-btn" type="button" id="addJoinCardBtn">+ 添加另一张关联表</button>
+            </div>
+            <div class="join-summary"><strong>关联摘要</strong><br /><span id="joinSql">${manualJoinCards.map(card => `${card.type} JOIN ${card.table} ON ajxx_tab.${card.mainField} = ${card.table}.${card.targetField}`).join('<br />')}</span></div>`,
+          lookup: `
+            <div class="join-list">
+              <div class="lookup-step"><div class="step-no">1</div><div class="form-field"><label>选择主表里的关联记录字段</label><select class="form-input"><option>owner_dept（负责部门）</option><option>city（所属城市）</option></select></div></div>
+              <div class="lookup-step"><div class="step-no">2</div><div class="form-field"><label>匹配到哪张表</label><select class="form-input"><option>dept_dict（部门字典表）</option><option>region_dict（区域字典表）</option></select></div></div>
+              <div class="lookup-step"><div class="step-no">3</div><div class="form-field"><label>通过哪个字段匹配</label><select class="form-input"><option>dept_name（部门名称）</option><option>dept_code（部门编码）</option></select></div></div>
+              <div class="lookup-step"><div class="step-no">4</div><div class="join-summary"><strong>查回字段</strong><br />勾选下方“部门编码、部门负责人”等字段后，会像普通列一样出现在结果表中。</div></div>
+            </div>`,
+        };
+        $('drawerBody').innerHTML = `
+          <div class="join-summary">
+            <strong>当前主表</strong><br />ajxx_tab（案件信息表）
+          </div>
+          <div class="join-mode-tabs">
+            <button class="join-mode ${joinMode === 'manual' ? 'active' : ''}" data-join-mode="manual">手动</button>
+            <button class="join-mode ${joinMode === 'lookup' ? 'active' : ''}" data-join-mode="lookup">Lookup</button>
+          </div>
+          ${bodyByMode[joinMode]}
+          <div class="section-title">展示关联字段</div>
+          <div class="join-fields" id="joinFields">
+            ${joinFieldOptions
+              .filter(field => joinMode === 'manual' || joinMode === 'path' || field.key.startsWith('dept_dict.'))
+              .map(field => `<label class="join-field"><input type="checkbox" data-join-field="${field.key}" ${field.visible ? 'checked' : ''} /><span class="join-field-name" title="${field.fullComment}">${field.name} · ${field.comment}</span><span class="type-badge">${field.type}</span></label>`).join('')}
+          </div>`;
+        $('drawerActions').innerHTML = '<button class="btn" id="clearJoinBtn">清除关联</button><button class="btn" id="cancelDrawer">取消</button><button class="btn primary" id="applyJoinBtn">应用关联</button>';
+        bindJoinDrawerEvents();
+        $('drawer').classList.add('open');
+      }
+
+      function applyJoin() {
+        const checked = [...document.querySelectorAll('[data-join-field]:checked')].map(input => input.dataset.joinField);
+        columns.splice(0, columns.length, ...columns.filter(col => baseColumnKeys.includes(col.key)));
+        const insertAt = Math.max(0, columns.findIndex(col => col.key === 'owner_dept') + 1);
+        const selectedJoinColumns = [];
+        joinFieldOptions.forEach(field => {
+          if (checked.includes(field.key)) selectedJoinColumns.push({ ...field, visible: true });
+        });
+        columns.splice(insertAt, 0, ...selectedJoinColumns);
+        joinApplied = checked.length > 0;
+        renderConditions();
+        renderGrid();
+        renderFieldList();
+        $('joinStrip').classList.toggle('show', joinApplied);
+        const summary = joinMode === 'manual'
+          ? `手动关联：${manualJoinCards.map(card => `${card.type} JOIN ${card.table}`).join('；')}`
+          : joinMode === 'lookup'
+            ? 'Lookup 关联：owner_dept → dept_dict.dept_name，查回所选字段'
+            : '关联已应用';
+        $('joinStripText').textContent = summary;
+        $('drawer').classList.remove('open');
+        toast(joinApplied ? `已关联 dept_dict，并展示 ${checked.length} 个字段` : '未选择关联展示字段');
+      }
+
+      function clearJoin() {
+        columns.splice(0, columns.length, ...columns.filter(col => baseColumnKeys.includes(col.key)));
+        joinApplied = false;
+        renderConditions();
+        renderGrid();
+        renderFieldList();
+        $('joinStrip').classList.remove('show');
+        $('drawer').classList.remove('open');
+        toast('已清除关联');
+      }
+
+      function moveColumn(sourceKey, targetKey) {
+        if (!sourceKey || !targetKey || sourceKey === targetKey) return;
+        const sourceIndex = columns.findIndex(col => col.key === sourceKey);
+        const targetIndex = columns.findIndex(col => col.key === targetKey);
+        if (sourceIndex < 0 || targetIndex < 0) return;
+        const [source] = columns.splice(sourceIndex, 1);
+        columns.splice(targetIndex, 0, source);
+        renderFieldList();
+        renderGrid();
+        toast(`已调整字段顺序：${source.name}`);
+      }
+
+      function bindColumnDrawerEvents() {
+        $('cancelDrawer').onclick = () => $('drawer').classList.remove('open');
+        $('applyDrawer').onclick = () => { renderGrid(); $('drawer').classList.remove('open'); toast('列设置已应用'); };
+        $('fieldSearch').oninput = renderFieldList;
+        $('fieldList').addEventListener('change', (event) => {
+          if (!event.target.matches('input[type="checkbox"]')) return;
+          const col = columns.find(c => c.key === event.target.dataset.field);
+          col.visible = event.target.checked;
+          renderFieldList();
+          renderGrid();
+        });
+        $('fieldList').addEventListener('dragstart', (event) => {
+          const item = event.target.closest('.field-item');
+          if (!item || $('fieldSearch').value.trim()) {
+            event.preventDefault();
+            toast('清空字段搜索后再拖拽排序');
+            return;
+          }
+          draggedFieldKey = item.dataset.fieldKey;
+          item.classList.add('dragging');
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', draggedFieldKey);
+        });
+        $('fieldList').addEventListener('dragover', (event) => {
+          const item = event.target.closest('.field-item');
+          if (!item || !draggedFieldKey || item.dataset.fieldKey === draggedFieldKey) return;
+          event.preventDefault();
+          document.querySelectorAll('.field-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+          item.classList.add('drag-over');
+        });
+        $('fieldList').addEventListener('dragleave', (event) => {
+          const item = event.target.closest('.field-item');
+          if (item) item.classList.remove('drag-over');
+        });
+        $('fieldList').addEventListener('drop', (event) => {
+          const item = event.target.closest('.field-item');
+          if (!item || !draggedFieldKey) return;
+          event.preventDefault();
+          const targetKey = item.dataset.fieldKey;
+          document.querySelectorAll('.field-item.drag-over, .field-item.dragging').forEach(el => el.classList.remove('drag-over', 'dragging'));
+          moveColumn(draggedFieldKey, targetKey);
+          draggedFieldKey = null;
+        });
+        $('fieldList').addEventListener('dragend', () => {
+          document.querySelectorAll('.field-item.drag-over, .field-item.dragging').forEach(el => el.classList.remove('drag-over', 'dragging'));
+          draggedFieldKey = null;
+        });
+        $('selectAllFields').onclick = () => { columns.forEach(c => c.visible = true); renderFieldList(); renderGrid(); };
+        $('invertFields').onclick = () => { columns.forEach(c => c.visible = !c.visible); renderFieldList(); renderGrid(); };
+        $('clearFields').onclick = () => { columns.forEach(c => c.visible = false); columns[0].visible = true; renderFieldList(); renderGrid(); };
+        $('resetFields').onclick = () => { columns.forEach((c) => c.visible = baseColumnKeys.includes(c.key) && c.key !== 'update_user'); renderFieldList(); renderGrid(); };
+      }
+
+      function bindJoinDrawerEvents() {
+        $('cancelDrawer').onclick = () => $('drawer').classList.remove('open');
+        $('applyJoinBtn').onclick = applyJoin;
+        $('clearJoinBtn').onclick = clearJoin;
+        document.querySelectorAll('[data-join-mode]').forEach(btn => {
+          btn.onclick = () => {
+            joinMode = btn.dataset.joinMode;
+            renderJoinDrawer();
+          };
+        });
+        const addJoinCardBtn = $('addJoinCardBtn');
+        if (addJoinCardBtn) {
+          addJoinCardBtn.onclick = () => {
+            const nextId = Math.max(...manualJoinCards.map(card => card.id), 0) + 1;
+            manualJoinCards.push({
+              id: nextId,
+              table: 'region_dict',
+              title: '区域字典',
+              mainField: 'city',
+              targetField: 'city_name',
+              type: 'LEFT'
+            });
+            renderJoinDrawer();
+            toast('已添加一张关联表');
+          };
+        }
+        document.querySelectorAll('[data-remove-join]').forEach(btn => {
+          btn.onclick = () => {
+            if (manualJoinCards.length <= 1) {
+              toast('至少保留一张关联表');
+              return;
+            }
+            manualJoinCards = manualJoinCards.filter(card => card.id !== Number(btn.dataset.removeJoin));
+            renderJoinDrawer();
+          };
+        });
+        document.querySelectorAll('[data-join-select]').forEach(select => {
+          select.onchange = () => {
+            const card = manualJoinCards.find(item => item.id === Number(select.dataset.cardId));
+            if (!card) return;
+            card[select.dataset.joinSelect] = select.value;
+            if (select.dataset.joinSelect === 'table') {
+              card.title = select.value === 'region_dict' ? '区域字典' : '部门字典';
+              if (select.value === 'region_dict') {
+                card.mainField = 'city';
+                card.targetField = 'city_name';
+              } else {
+                card.mainField = 'owner_dept';
+                card.targetField = 'dept_name';
+              }
+            }
+            renderJoinDrawer();
+          };
+        });
+      }
+
+      function selectCell(td) {
+        document.querySelectorAll('.data-grid td.selected').forEach(el => el.classList.remove('selected'));
+        td.classList.add('selected');
+      }
+
+      function addFilter(field, op, value) {
+        filters.push({ field, op, value });
+        renderConditions();
+        renderGrid();
+        toast(`已添加筛选：${field} ${op} ${value}`);
+      }
+
+      function openFilterPopover(anchor, presetField = 'status', index = null) {
+        editingFilterIndex = index;
+        const current = index === null ? { field: presetField, op: '=', value: '' } : filters[index];
+        const pop = $('filterPopover');
+        pop.innerHTML = `
+          <div class="popover-head"><span>${index === null ? '新增筛选' : '编辑筛选'}</span><span class="x" id="closeFilterPopover">×</span></div>
+          <div class="popover-body">
+            <div class="form-field"><label>字段</label><select class="form-input" id="filterField">${visibleFieldOptions(current.field)}</select></div>
+            <div class="form-field"><label>操作符</label><select class="form-input" id="filterOp">${operatorOptions(current.op)}</select></div>
+            <div class="form-field"><label>值</label><input class="form-input" id="filterValue" value="${current.value || ''}" placeholder="输入筛选值" /></div>
+          </div>
+          <div class="popover-actions"><button class="btn" id="cancelFilter">取消</button><button class="btn primary" id="applyFilter">应用筛选</button></div>`;
+        placePopover(pop, anchor);
+        $('closeFilterPopover').onclick = $('cancelFilter').onclick = () => pop.classList.remove('open');
+        $('applyFilter').onclick = () => {
+          const next = { field: $('filterField').value, op: $('filterOp').value, value: $('filterValue').value || '示例值' };
+          if (editingFilterIndex === null) filters.push(next);
+          else filters[editingFilterIndex] = next;
+          pop.classList.remove('open');
+          renderConditions();
+          renderGrid();
+          runQuery();
+        };
+      }
+
+      function openSortPopover(anchor) {
+        const pop = $('sortPopover');
+        const draft = sorts.length ? [...sorts] : [{ field: 'create_time', dir: 'DESC' }];
+        const renderDraft = () => {
+          $('sortRows').innerHTML = draft.map((item, idx) => `
+            <div class="sort-row">
+              <select class="form-input" data-sort-field="${idx}">${visibleFieldOptions(item.field)}</select>
+              <select class="form-input" data-sort-dir="${idx}"><option value="ASC" ${item.dir === 'ASC' ? 'selected' : ''}>升序</option><option value="DESC" ${item.dir === 'DESC' ? 'selected' : ''}>降序</option></select>
+              <button class="mini-btn" data-sort-remove="${idx}">×</button>
+            </div>`).join('');
+          document.querySelectorAll('[data-sort-field]').forEach(sel => sel.onchange = () => { draft[Number(sel.dataset.sortField)].field = sel.value; renderDraft(); });
+          document.querySelectorAll('[data-sort-dir]').forEach(sel => sel.onchange = () => { draft[Number(sel.dataset.sortDir)].dir = sel.value; renderDraft(); });
+          document.querySelectorAll('[data-sort-remove]').forEach(btn => btn.onclick = () => { draft.splice(Number(btn.dataset.sortRemove), 1); renderDraft(); });
+        };
+        pop.innerHTML = `
+          <div class="popover-head"><span>排序管理</span><span class="x" id="closeSortPopover">×</span></div>
+          <div class="popover-body">
+            <div id="sortRows" class="form-grid"></div>
+            <button class="link-btn" id="addSortRow">+ 添加排序字段</button>
+          </div>
+          <div class="popover-actions"><button class="btn" id="clearSortInPopover">清空</button><button class="btn" id="cancelSort">取消</button><button class="btn primary" id="applySort">应用排序</button></div>`;
+        placePopover(pop, anchor);
+        renderDraft();
+        $('addSortRow').onclick = () => { draft.push({ field: 'id', dir: 'ASC' }); renderDraft(); };
+        $('clearSortInPopover').onclick = () => { draft.splice(0, draft.length); renderDraft(); };
+        $('closeSortPopover').onclick = $('cancelSort').onclick = () => pop.classList.remove('open');
+        $('applySort').onclick = () => {
+          sorts = draft.filter(item => item.field);
+          pop.classList.remove('open');
+          renderConditions();
+          renderGrid();
+          runQuery();
+        };
+      }
+
+      function setSort(field) {
+        const current = sorts.find(s => s.field === field);
+        if (!current) sorts = [{ field, dir: 'ASC' }];
+        else if (current.dir === 'ASC') sorts = [{ field, dir: 'DESC' }];
+        else sorts = sorts.filter(s => s.field !== field);
+        renderConditions();
+        renderGrid();
+      }
+
+      function openCellMenu(event, td) {
+        event.preventDefault();
+        selectCell(td);
+        contextCell = td;
+        const menu = $('contextMenu');
+        menu.innerHTML = `
+          <div class="menu-item" data-action="copy">复制值</div>
+          <div class="menu-item" data-action="copy-row">复制整行 JSON</div>
+          <div class="menu-item active" data-action="include">仅看此值</div>
+          <div class="menu-item" data-action="exclude">排除此值</div>
+          <div class="menu-item" data-action="detail">查看完整内容</div>
+          <div class="menu-item" data-action="sort-desc">按此列降序</div>`;
+        menu.style.left = `${Math.min(event.clientX, window.innerWidth - 200)}px`;
+        menu.style.top = `${Math.min(event.clientY, window.innerHeight - 210)}px`;
+        menu.classList.add('open');
+      }
+
+      function runQuery() {
+        $('costStatus').textContent = `耗时 ${(Math.random() * 0.5 + 0.18).toFixed(2)}s`;
+        $('refreshStatus').textContent = `上次刷新 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`;
+        toast('查询完成');
+      }
+
+      document.addEventListener('click', (event) => {
+        if (!event.target.closest('#contextMenu')) $('contextMenu').classList.remove('open');
+        if (!event.target.closest('#filterPopover') && !event.target.closest('#sortPopover') && !event.target.closest('.add-link') && !event.target.closest('[data-edit-filter-index]') && !event.target.closest('#addFilterBtn') && !event.target.closest('#addSortBtn')) {
+          $('filterPopover').classList.remove('open');
+          $('sortPopover').classList.remove('open');
+        }
+        if (event.target.matches('[data-filter-index]')) {
+          event.stopPropagation();
+          filters.splice(Number(event.target.dataset.filterIndex), 1);
+          renderConditions();
+          renderGrid();
+        }
+        const editChip = event.target.closest('[data-edit-filter-index]');
+        if (editChip && !event.target.matches('[data-filter-index]')) {
+          openFilterPopover(editChip, filters[Number(editChip.dataset.editFilterIndex)].field, Number(editChip.dataset.editFilterIndex));
+        }
+        if (event.target.matches('[data-sort-index]')) {
+          sorts.splice(Number(event.target.dataset.sortIndex), 1);
+          renderConditions();
+          renderGrid();
+        }
+        if (event.target.matches('.menu-trigger')) {
+          event.stopPropagation();
+          const key = event.target.dataset.key;
+          const rect = event.target.getBoundingClientRect();
+          const menu = $('contextMenu');
+          menu.innerHTML = `
+            <div class="menu-item" data-head-action="sort-asc" data-key="${key}">升序排序</div>
+            <div class="menu-item" data-head-action="sort-desc" data-key="${key}">降序排序</div>
+            <div class="menu-item" data-head-action="filter" data-key="${key}">按此列筛选</div>
+            <div class="menu-item" data-head-action="hide" data-key="${key}">隐藏此列</div>
+            <div class="menu-item" data-head-action="copy" data-key="${key}">复制字段名</div>`;
+          menu.style.left = `${rect.left - 130}px`;
+          menu.style.top = `${rect.bottom + 4}px`;
+          menu.classList.add('open');
+        }
+      });
+
+      $('contextMenu').addEventListener('click', (event) => {
+        const item = event.target.closest('.menu-item');
+        if (!item) return;
+        const key = item.dataset.key;
+        if (item.dataset.headAction === 'sort-asc') { sorts = [{ field: key, dir: 'ASC' }]; renderConditions(); renderGrid(); }
+        if (item.dataset.headAction === 'sort-desc') { sorts = [{ field: key, dir: 'DESC' }]; renderConditions(); renderGrid(); }
+        if (item.dataset.headAction === 'filter') openFilterPopover(item, key);
+        if (item.dataset.headAction === 'hide') { const col = columns.find(c => c.key === key); col.visible = false; renderGrid(); renderFieldList(); }
+        if (item.dataset.headAction === 'copy') toast(`已复制字段名：${key}`);
+
+        if (contextCell) {
+          const field = contextCell.dataset.key;
+          const value = contextCell.dataset.value || 'NULL';
+          if (item.dataset.action === 'include') addFilter(field, '=', value);
+          if (item.dataset.action === 'exclude') addFilter(field, '!=', value);
+          if (item.dataset.action === 'copy') toast(`已复制：${value}`);
+          if (item.dataset.action === 'copy-row') toast('已复制整行 JSON');
+          if (item.dataset.action === 'detail') toast(`完整内容：${value}`);
+          if (item.dataset.action === 'sort-desc') { sorts = [{ field, dir: 'DESC' }]; renderConditions(); renderGrid(); }
+        }
+        $('contextMenu').classList.remove('open');
+      });
+
+      $('tree').addEventListener('click', (event) => {
+        const toggleNode = event.target.closest('[data-tree-toggle]');
+        if (toggleNode) {
+          const key = toggleNode.dataset.treeToggle;
+          treeOpenState[key] = !treeOpenState[key];
+          renderObjectTree();
+          return;
+        }
+        const node = event.target.closest('.node.table');
+        if (!node) return;
+        document.querySelectorAll('.node.table').forEach(el => el.classList.remove('active'));
+        node.classList.add('active');
+        const table = node.dataset.table;
+        const comment = node.dataset.comment;
+        setCurrentTable(table, comment);
+        page = 1;
+        $('pageStatus').textContent = `第 ${page} / 26 页`;
+        runQuery();
+      });
+
+      $('queryBtn').onclick = runQuery;
+      $('refreshBtn').onclick = runQuery;
+      $('reloadIcon').onclick = runQuery;
+      $('exportBtn').onclick = () => toast('已按当前筛选与字段配置导出');
+      $('saveViewBtn').onclick = () => toast('视图已保存');
+      $('joinBtn').onclick = renderJoinDrawer;
+      $('copyWhereBtn').onclick = () => toast('已复制 WHERE 条件');
+      $('addFilterBtn').onclick = (event) => openFilterPopover(event.currentTarget);
+      $('addSortBtn').onclick = (event) => openSortPopover(event.currentTarget);
+      $('columnBtn').onclick = renderColumnDrawer;
+      $('drawerClose').onclick = () => $('drawer').classList.remove('open');
+      $('nextPage').onclick = () => { page = Math.min(26, page + 1); $('pageStatus').textContent = `第 ${page} / 26 页`; runQuery(); };
+      $('prevPage').onclick = () => { page = Math.max(1, page - 1); $('pageStatus').textContent = `第 ${page} / 26 页`; runQuery(); };
+      $('jumpPage').onclick = () => { page = 8; $('pageStatus').textContent = `第 ${page} / 26 页`; runQuery(); };
+      $('pageSize').onchange = () => { $('rowStatus').textContent = `返回 ${$('pageSize').value.replace(' 条/页', '')} 行`; runQuery(); };
+      $('treeReload').onclick = () => toast('对象树已刷新');
+      $('joinStripClear').onclick = clearJoin;
+      $('sidebarResize').addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        document.body.classList.add('resizing');
+        const onMove = (moveEvent) => {
+          const nextWidth = Math.max(42, Math.min(420, moveEvent.clientX));
+          sidebarCollapsed = nextWidth <= 72;
+          sidebarWidth = sidebarCollapsed ? 42 : nextWidth;
+          $('mainLayout').classList.toggle('sidebar-collapsed', sidebarCollapsed);
+          $('mainLayout').style.setProperty('--sidebar-width', `${sidebarWidth}px`);
+        };
+        const onUp = () => {
+          document.body.classList.remove('resizing');
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+      $('datasourceSelect').onchange = () => {
+        currentDatasource = $('datasourceSelect').value;
+        currentDatabase = Object.keys(datasourceCatalog[currentDatasource].databases)[0];
+        currentTable = '';
+        currentTableComment = '';
+        refreshCatalogContext();
+        clearJoin();
+        runQuery();
+        toast(`已切换数据源：${currentDatasource}`);
+      };
+      $('databaseSelect').onchange = () => {
+        currentDatabase = $('databaseSelect').value;
+        currentTable = '';
+        currentTableComment = '';
+        refreshCatalogContext();
+        clearJoin();
+        runQuery();
+        toast(`已切换数据库：${currentDatabase}`);
+      };
+
+      renderDatasourceSelectors();
+      refreshCatalogContext();
+      renderConditions();
+      renderGrid();
+      bindColumnDrawerEvents();
+      renderFieldList();
+    </script>
+  </body>
+</html>
