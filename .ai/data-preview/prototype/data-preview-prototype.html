@@ -100,6 +100,31 @@
       .tab.active { background: #fff; color: var(--text); }
       .tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .table-tools { display: flex; align-items: center; gap: 8px; padding: 0 10px; border-bottom: 1px solid var(--line); background: #fff; }
+      .view-select-wrap { position: relative; display: inline-flex; }
+      .view-select-btn { min-width: 148px; justify-content: space-between; max-width: 230px; }
+      .view-select-btn .chev { color: var(--text-faint); margin-left: 8px; }
+      .view-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .view-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        width: 240px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+        border-radius: 6px;
+        padding: 6px;
+        z-index: 30;
+        display: none;
+      }
+      .view-menu.open { display: block; }
+      .view-menu-title { padding: 6px 8px; font-size: 12px; color: var(--text-faint); }
+      .view-menu-item { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 5px 8px; border-radius: 4px; font-size: 13px; cursor: pointer; }
+      .view-menu-item:hover { background: #f3f6fb; }
+      .view-menu-item.disabled { color: var(--text-faint); cursor: not-allowed; }
+      .view-menu-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .view-check { width: 14px; color: var(--blue); font-weight: 700; }
+      .view-menu-divider { height: 1px; background: var(--line); margin: 6px 0; }
       .tool-sep { width: 1px; height: 22px; background: var(--line); }
       .tool-spacer { flex: 1; }
       .page-size { height: 28px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--text-soft); padding: 0 7px; }
@@ -197,6 +222,13 @@
       .popover-body { padding: 12px; display: grid; gap: 10px; }
       .popover-actions { height: 46px; display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 0 12px; border-top: 1px solid var(--line); background: #fbfcfe; }
       .sort-row { display: grid; grid-template-columns: minmax(0, 1fr) 92px 28px; gap: 7px; align-items: center; }
+      .modal-mask { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.22); display: none; align-items: center; justify-content: center; z-index: 60; }
+      .modal-mask.open { display: flex; }
+      .view-dialog { width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22); }
+      .view-dialog-head { padding: 14px 16px; border-bottom: 1px solid var(--line); font-weight: 700; }
+      .view-dialog-body { padding: 16px; color: var(--text); line-height: 1.6; }
+      .view-dialog-actions { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; background: #fbfcfe; }
+      .view-error { margin-top: 8px; color: #b91c1c; font-size: 12px; min-height: 16px; }
       .toast { position: fixed; left: 50%; bottom: 54px; transform: translateX(-50%); background: #101828; color: #fff; border-radius: 6px; padding: 9px 13px; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: 0.18s ease; z-index: 30; }
       .toast.show { opacity: 1; }
 
@@ -263,6 +295,12 @@
           <div class="tabs"><div class="tab active"><span id="activeTab">ajxx_tab 案件信息表 · ds_demo</span><b>×</b></div><div class="tab"><span>case_flow_log</span><b>×</b></div></div>
           <div class="table-tools">
             <button class="btn icon" id="reloadIcon">↻</button>
+            <div class="view-select-wrap">
+              <button class="btn view-select-btn" id="viewSelectBtn" title="管理当前表的个人视图">
+                <span class="view-label" id="activeViewLabel">视图：默认视图</span><span class="chev">▾</span>
+              </button>
+              <div class="view-menu" id="viewMenu"></div>
+            </div>
             <button class="btn" id="columnBtn">列设置</button>
             <button class="btn" id="addFilterBtn">筛选</button>
             <button class="btn" id="addSortBtn">排序</button>
@@ -302,6 +340,7 @@
       <div class="context-menu" id="contextMenu"></div>
       <div class="popover" id="filterPopover"></div>
       <div class="popover" id="sortPopover"></div>
+      <div class="modal-mask" id="viewModal"></div>
       <div class="toast" id="toast">已更新</div>
     </div>
 
@@ -420,6 +459,13 @@
       ];
       let sorts = [{ field: 'create_time', dir: 'DESC' }];
       let page = 1;
+      let activeViewId = 'default';
+      let viewDirty = false;
+      let views = [
+        { id: 'default', name: '默认视图', tableKey: '', isDefault: true, config: null },
+        { id: 'sync-check', name: '同步结果排查', tableKey: '', isDefault: false, config: null },
+        { id: 'valid-cases', name: '只看有效案件', tableKey: '', isDefault: false, config: null }
+      ];
       let contextCell = null;
       let draggedFieldKey = null;
       let joinApplied = false;
@@ -439,6 +485,261 @@
         el.textContent = text;
         el.classList.add('show');
         setTimeout(() => el.classList.remove('show'), 1300);
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function currentTableKey() {
+        return `${currentDatasource}.${currentDatabase}.${currentTable}`;
+      }
+
+      function currentPageSize() {
+        return Number($('pageSize').value.replace(' 条/页', '')) || 50;
+      }
+
+      function setPageSize(size) {
+        const value = `${size || 50} 条/页`;
+        const exists = [...$('pageSize').options].some(option => option.value === value || option.textContent === value);
+        if (exists) $('pageSize').value = value;
+        $('rowStatus').textContent = `返回 ${size || 50} 行`;
+      }
+
+      function activeView() {
+        return views.find(view => view.id === activeViewId) || views[0];
+      }
+
+      function renderViewLabel() {
+        const view = activeView();
+        $('activeViewLabel').textContent = `视图：${view.name}${viewDirty ? ' *' : ''}`;
+        $('activeViewLabel').title = `视图：${view.name}${viewDirty ? '（未保存）' : ''}`;
+      }
+
+      function renderViewMenu() {
+        const current = activeView();
+        $('viewMenu').innerHTML = `
+          <div class="view-menu-title">我的视图</div>
+          ${views.map(view => `
+            <div class="view-menu-item" data-view-id="${view.id}">
+              <span class="view-check">${view.id === activeViewId ? '✓' : ''}</span>
+              <span class="view-menu-name" title="${escapeHtml(view.name)}">${escapeHtml(view.name)}</span>
+            </div>
+          `).join('')}
+          <div class="view-menu-divider"></div>
+          <div class="view-menu-item" data-view-action="save"><span class="view-check"></span><span class="view-menu-name">保存当前视图</span></div>
+          <div class="view-menu-item" data-view-action="saveAs"><span class="view-check"></span><span class="view-menu-name">另存为新视图</span></div>
+          <div class="view-menu-item ${current.isDefault ? 'disabled' : ''}" data-view-action="rename"><span class="view-check"></span><span class="view-menu-name">重命名当前视图</span></div>
+          <div class="view-menu-item ${current.isDefault ? 'disabled' : ''}" data-view-action="delete"><span class="view-check"></span><span class="view-menu-name">删除当前视图</span></div>
+        `;
+      }
+
+      function markViewDirty() {
+        viewDirty = true;
+        renderViewLabel();
+      }
+
+      function clearViewDirty() {
+        viewDirty = false;
+        renderViewLabel();
+      }
+
+      function captureViewConfig() {
+        return {
+          columns: columns
+            .filter(col => baseColumnKeys.includes(col.key))
+            .map((col, order) => ({ key: col.key, visible: col.visible, width: col.width, order })),
+          filters: filters.map(item => ({ ...item })),
+          sorts: sorts.map((item, order) => ({ ...item, order })),
+          pageSize: currentPageSize()
+        };
+      }
+
+      function applyViewConfig(config) {
+        if (!config) return;
+        columns.splice(0, columns.length, ...columns.filter(col => baseColumnKeys.includes(col.key)));
+        const byKey = new Map(columns.map(col => [col.key, col]));
+        const ordered = [];
+        config.columns.forEach(saved => {
+          const col = byKey.get(saved.key);
+          if (!col) return;
+          col.visible = saved.visible;
+          if (saved.width) col.width = saved.width;
+          ordered.push(col);
+          byKey.delete(saved.key);
+        });
+        columns.splice(0, columns.length, ...ordered, ...Array.from(byKey.values()));
+        filters = config.filters.map(item => ({ ...item }));
+        sorts = config.sorts.map(({ order, ...item }) => ({ ...item }));
+        setPageSize(config.pageSize || 50);
+        joinApplied = false;
+        $('joinStrip').classList.remove('show');
+        page = 1;
+        $('pageStatus').textContent = `第 ${page} / 26 页`;
+        renderConditions();
+        renderGrid();
+        renderFieldList();
+      }
+
+      function seedViewConfigs() {
+        const key = currentTableKey();
+        views = views.map(view => {
+          if (view.config) return { ...view, tableKey: key };
+          if (view.id === 'default') return { ...view, tableKey: key, config: captureViewConfig() };
+          if (view.id === 'sync-check') {
+            const config = captureViewConfig();
+            config.columns = config.columns.map(col => col.key === 'remark' ? { ...col, visible: false } : col);
+            config.filters = [
+              { field: 'status', op: '=', value: '有效' },
+              { field: 'owner_dept', op: '包含', value: '同步' }
+            ];
+            config.sorts = [{ field: 'create_time', dir: 'DESC', order: 0 }];
+            config.pageSize = 50;
+            return { ...view, tableKey: key, config };
+          }
+          if (view.id === 'valid-cases') {
+            const config = captureViewConfig();
+            config.columns = config.columns.map(col => ['remark', 'update_user'].includes(col.key) ? { ...col, visible: false } : col);
+            config.filters = [{ field: 'status', op: '=', value: '有效' }];
+            config.sorts = [{ field: 'id', dir: 'ASC', order: 0 }];
+            config.pageSize = 100;
+            return { ...view, tableKey: key, config };
+          }
+          return { ...view, tableKey: key };
+        });
+      }
+
+      function closeViewModal() {
+        $('viewModal').classList.remove('open');
+        $('viewModal').innerHTML = '';
+      }
+
+      function openViewConfirm(title, message, okText, onOk) {
+        $('viewModal').innerHTML = `
+          <div class="view-dialog">
+            <div class="view-dialog-head">${escapeHtml(title)}</div>
+            <div class="view-dialog-body">${escapeHtml(message)}</div>
+            <div class="view-dialog-actions">
+              <button class="btn" id="viewCancelBtn">取消</button>
+              <button class="btn primary" id="viewOkBtn">${escapeHtml(okText)}</button>
+            </div>
+          </div>
+        `;
+        $('viewModal').classList.add('open');
+        $('viewCancelBtn').onclick = closeViewModal;
+        $('viewOkBtn').onclick = () => { closeViewModal(); onOk(); };
+      }
+
+      function openViewNameDialog(title, initialValue, okText, onSubmit) {
+        $('viewModal').innerHTML = `
+          <div class="view-dialog">
+            <div class="view-dialog-head">${escapeHtml(title)}</div>
+            <div class="view-dialog-body">
+              <div class="form-field">
+                <label>视图名称</label>
+                <input class="form-input" id="viewNameInput" value="${escapeHtml(initialValue || '')}" maxlength="30" />
+                <div class="view-error" id="viewNameError"></div>
+              </div>
+            </div>
+            <div class="view-dialog-actions">
+              <button class="btn" id="viewCancelBtn">取消</button>
+              <button class="btn primary" id="viewOkBtn">${escapeHtml(okText)}</button>
+            </div>
+          </div>
+        `;
+        $('viewModal').classList.add('open');
+        $('viewCancelBtn').onclick = closeViewModal;
+        $('viewOkBtn').onclick = () => {
+          const error = onSubmit($('viewNameInput').value);
+          if (error) {
+            $('viewNameError').textContent = error;
+            return;
+          }
+          closeViewModal();
+        };
+        $('viewNameInput').focus();
+        $('viewNameInput').select();
+      }
+
+      function validateViewName(name, currentId = null) {
+        if (!name) return '视图名称不能为空';
+        if ([...name].length > 30) return '视图名称不能超过 30 个中文字符';
+        if (views.some(view => view.id !== currentId && view.name === name)) return '同一张表下已存在同名视图';
+        return '';
+      }
+
+      function switchView(viewId, force = false) {
+        const target = views.find(view => view.id === viewId);
+        if (!target || target.id === activeViewId) return;
+        if (viewDirty && !force) {
+          openViewConfirm('当前视图有未保存修改', `切换到“${target.name}”会放弃当前修改。`, '放弃修改并切换', () => switchView(target.id, true));
+          return;
+        }
+        activeViewId = target.id;
+        applyViewConfig(target.config);
+        clearViewDirty();
+        renderViewMenu();
+        toast(`已切换到视图：${target.name}`);
+      }
+
+      function saveCurrentView() {
+        const current = activeView();
+        current.config = captureViewConfig();
+        clearViewDirty();
+        renderViewMenu();
+        toast(`已保存视图：${current.name}`);
+      }
+
+      function saveAsView(name) {
+        const trimmed = name.trim();
+        const error = validateViewName(trimmed);
+        if (error) return error;
+        const view = {
+          id: `view-${Date.now()}`,
+          name: trimmed,
+          tableKey: currentTableKey(),
+          isDefault: false,
+          config: captureViewConfig()
+        };
+        views.push(view);
+        activeViewId = view.id;
+        clearViewDirty();
+        renderViewMenu();
+        toast(`已另存为视图：${view.name}`);
+        return '';
+      }
+
+      function renameCurrentView(name) {
+        const current = activeView();
+        if (current.isDefault) return '默认视图不能重命名';
+        const trimmed = name.trim();
+        const error = validateViewName(trimmed, current.id);
+        if (error) return error;
+        current.name = trimmed;
+        renderViewLabel();
+        renderViewMenu();
+        toast(`已重命名为：${current.name}`);
+        return '';
+      }
+
+      function deleteCurrentView() {
+        const current = activeView();
+        if (current.isDefault) {
+          toast('默认视图不能删除');
+          return;
+        }
+        const name = current.name;
+        views = views.filter(view => view.id !== current.id);
+        activeViewId = 'default';
+        applyViewConfig(activeView().config);
+        clearViewDirty();
+        renderViewMenu();
+        toast(`已删除视图：${name}`);
       }
 
       function visibleFieldOptions(selected) {
@@ -563,6 +864,8 @@
         renderObjectTree();
         page = 1;
         $('pageStatus').textContent = `第 ${page} / 26 页`;
+        activeViewId = 'default';
+        clearViewDirty();
       }
 
       function getCellValue(row, key) {
@@ -743,6 +1046,7 @@
         columns.splice(targetIndex, 0, source);
         renderFieldList();
         renderGrid();
+        markViewDirty();
         toast(`已调整字段顺序：${source.name}`);
       }
 
@@ -756,6 +1060,7 @@
           col.visible = event.target.checked;
           renderFieldList();
           renderGrid();
+          markViewDirty();
         });
         $('fieldList').addEventListener('dragstart', (event) => {
           const item = event.target.closest('.field-item');
@@ -793,10 +1098,10 @@
           document.querySelectorAll('.field-item.drag-over, .field-item.dragging').forEach(el => el.classList.remove('drag-over', 'dragging'));
           draggedFieldKey = null;
         });
-        $('selectAllFields').onclick = () => { columns.forEach(c => c.visible = true); renderFieldList(); renderGrid(); };
-        $('invertFields').onclick = () => { columns.forEach(c => c.visible = !c.visible); renderFieldList(); renderGrid(); };
-        $('clearFields').onclick = () => { columns.forEach(c => c.visible = false); columns[0].visible = true; renderFieldList(); renderGrid(); };
-        $('resetFields').onclick = () => { columns.forEach((c) => c.visible = baseColumnKeys.includes(c.key) && c.key !== 'update_user'); renderFieldList(); renderGrid(); };
+        $('selectAllFields').onclick = () => { columns.forEach(c => c.visible = true); renderFieldList(); renderGrid(); markViewDirty(); };
+        $('invertFields').onclick = () => { columns.forEach(c => c.visible = !c.visible); renderFieldList(); renderGrid(); markViewDirty(); };
+        $('clearFields').onclick = () => { columns.forEach(c => c.visible = false); columns[0].visible = true; renderFieldList(); renderGrid(); markViewDirty(); };
+        $('resetFields').onclick = () => { columns.forEach((c) => c.visible = baseColumnKeys.includes(c.key) && c.key !== 'update_user'); renderFieldList(); renderGrid(); markViewDirty(); };
       }
 
       function bindJoinDrawerEvents() {
@@ -864,6 +1169,7 @@
         filters.push({ field, op, value });
         renderConditions();
         renderGrid();
+        markViewDirty();
         toast(`已添加筛选：${field} ${op} ${value}`);
       }
 
@@ -888,6 +1194,7 @@
           pop.classList.remove('open');
           renderConditions();
           renderGrid();
+          markViewDirty();
           runQuery();
         };
       }
@@ -923,6 +1230,7 @@
           pop.classList.remove('open');
           renderConditions();
           renderGrid();
+          markViewDirty();
           runQuery();
         };
       }
@@ -934,6 +1242,7 @@
         else sorts = sorts.filter(s => s.field !== field);
         renderConditions();
         renderGrid();
+        markViewDirty();
       }
 
       function openCellMenu(event, td) {
@@ -961,6 +1270,7 @@
 
       document.addEventListener('click', (event) => {
         if (!event.target.closest('#contextMenu')) $('contextMenu').classList.remove('open');
+        if (!event.target.closest('.view-select-wrap')) $('viewMenu').classList.remove('open');
         if (!event.target.closest('#filterPopover') && !event.target.closest('#sortPopover') && !event.target.closest('.add-link') && !event.target.closest('[data-edit-filter-index]') && !event.target.closest('#addFilterBtn') && !event.target.closest('#addSortBtn')) {
           $('filterPopover').classList.remove('open');
           $('sortPopover').classList.remove('open');
@@ -970,6 +1280,7 @@
           filters.splice(Number(event.target.dataset.filterIndex), 1);
           renderConditions();
           renderGrid();
+          markViewDirty();
         }
         const editChip = event.target.closest('[data-edit-filter-index]');
         if (editChip && !event.target.matches('[data-filter-index]')) {
@@ -979,6 +1290,7 @@
           sorts.splice(Number(event.target.dataset.sortIndex), 1);
           renderConditions();
           renderGrid();
+          markViewDirty();
         }
         if (event.target.matches('.menu-trigger')) {
           event.stopPropagation();
@@ -1001,10 +1313,10 @@
         const item = event.target.closest('.menu-item');
         if (!item) return;
         const key = item.dataset.key;
-        if (item.dataset.headAction === 'sort-asc') { sorts = [{ field: key, dir: 'ASC' }]; renderConditions(); renderGrid(); }
-        if (item.dataset.headAction === 'sort-desc') { sorts = [{ field: key, dir: 'DESC' }]; renderConditions(); renderGrid(); }
+        if (item.dataset.headAction === 'sort-asc') { sorts = [{ field: key, dir: 'ASC' }]; renderConditions(); renderGrid(); markViewDirty(); }
+        if (item.dataset.headAction === 'sort-desc') { sorts = [{ field: key, dir: 'DESC' }]; renderConditions(); renderGrid(); markViewDirty(); }
         if (item.dataset.headAction === 'filter') openFilterPopover(item, key);
-        if (item.dataset.headAction === 'hide') { const col = columns.find(c => c.key === key); col.visible = false; renderGrid(); renderFieldList(); }
+        if (item.dataset.headAction === 'hide') { const col = columns.find(c => c.key === key); col.visible = false; renderGrid(); renderFieldList(); markViewDirty(); }
         if (item.dataset.headAction === 'copy') toast(`已复制字段名：${key}`);
 
         if (contextCell) {
@@ -1015,7 +1327,7 @@
           if (item.dataset.action === 'copy') toast(`已复制：${value}`);
           if (item.dataset.action === 'copy-row') toast('已复制整行 JSON');
           if (item.dataset.action === 'detail') toast(`完整内容：${value}`);
-          if (item.dataset.action === 'sort-desc') { sorts = [{ field, dir: 'DESC' }]; renderConditions(); renderGrid(); }
+          if (item.dataset.action === 'sort-desc') { sorts = [{ field, dir: 'DESC' }]; renderConditions(); renderGrid(); markViewDirty(); }
         }
         $('contextMenu').classList.remove('open');
       });
@@ -1044,7 +1356,7 @@
       $('refreshBtn').onclick = runQuery;
       $('reloadIcon').onclick = runQuery;
       $('exportBtn').onclick = () => toast('已按当前筛选与字段配置导出');
-      $('saveViewBtn').onclick = () => toast('视图已保存');
+      $('saveViewBtn').onclick = saveCurrentView;
       $('joinBtn').onclick = renderJoinDrawer;
       $('copyWhereBtn').onclick = () => toast('已复制 WHERE 条件');
       $('addFilterBtn').onclick = (event) => openFilterPopover(event.currentTarget);
@@ -1054,7 +1366,7 @@
       $('nextPage').onclick = () => { page = Math.min(26, page + 1); $('pageStatus').textContent = `第 ${page} / 26 页`; runQuery(); };
       $('prevPage').onclick = () => { page = Math.max(1, page - 1); $('pageStatus').textContent = `第 ${page} / 26 页`; runQuery(); };
       $('jumpPage').onclick = () => { page = 8; $('pageStatus').textContent = `第 ${page} / 26 页`; runQuery(); };
-      $('pageSize').onchange = () => { $('rowStatus').textContent = `返回 ${$('pageSize').value.replace(' 条/页', '')} 行`; runQuery(); };
+      $('pageSize').onchange = () => { $('rowStatus').textContent = `返回 ${$('pageSize').value.replace(' 条/页', '')} 行`; markViewDirty(); runQuery(); };
       $('treeReload').onclick = () => toast('对象树已刷新');
       $('joinStripClear').onclick = clearJoin;
       $('sidebarResize').addEventListener('mousedown', (event) => {
@@ -1095,12 +1407,44 @@
         toast(`已切换数据库：${currentDatabase}`);
       };
 
+      $('viewSelectBtn').onclick = (event) => {
+        event.stopPropagation();
+        renderViewMenu();
+        $('viewMenu').classList.toggle('open');
+      };
+
+      $('viewMenu').onclick = (event) => {
+        event.stopPropagation();
+        const viewItem = event.target.closest('[data-view-id]');
+        const actionItem = event.target.closest('[data-view-action]');
+        if (viewItem) {
+          $('viewMenu').classList.remove('open');
+          switchView(viewItem.dataset.viewId);
+          return;
+        }
+        if (!actionItem) return;
+        const action = actionItem.dataset.viewAction;
+        if (actionItem.classList.contains('disabled')) {
+          if (action === 'rename') toast('默认视图不能重命名');
+          if (action === 'delete') toast('默认视图不能删除');
+          return;
+        }
+        $('viewMenu').classList.remove('open');
+        if (action === 'save') saveCurrentView();
+        if (action === 'saveAs') openViewNameDialog('另存为新视图', '', '保存', saveAsView);
+        if (action === 'rename') openViewNameDialog('重命名当前视图', activeView().name, '保存', renameCurrentView);
+        if (action === 'delete') openViewConfirm('删除当前视图', `确认删除“${activeView().name}”？删除后会切回默认视图。`, '删除', deleteCurrentView);
+      };
+
       renderDatasourceSelectors();
       refreshCatalogContext();
       renderConditions();
       renderGrid();
       bindColumnDrawerEvents();
       renderFieldList();
+      seedViewConfigs();
+      clearViewDirty();
+      renderViewMenu();
     </script>
   </body>
 </html>
