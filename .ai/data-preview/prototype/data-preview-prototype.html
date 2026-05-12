@@ -54,6 +54,7 @@
       .selectbox { height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; min-width: 176px; }
       .selectbox select { border: none; background: transparent; color: var(--text); font-weight: 650; outline: none; min-width: 118px; }
       .table-context { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; color: var(--text-soft); }
+      .table-icon { color: #60708a; font-size: 14px; }
       .table-context strong { color: var(--text); font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .pill { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-soft); color: var(--text-soft); font-size: 12px; white-space: nowrap; }
       .btn { height: 32px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -248,7 +249,7 @@
         <div class="selectbox">数据源&nbsp;<select id="datasourceSelect" aria-label="选择数据源"></select></div>
         <div class="selectbox">数据库&nbsp;<select id="databaseSelect" aria-label="选择数据库"></select></div>
         <div class="table-context">
-          <span>当前表</span>
+          <span class="table-icon" title="当前打开表">▦</span>
           <strong id="currentTableTitle">ajxx_tab（案件信息表）</strong>
           <span class="pill" id="fieldCount">10 字段</span>
           <span class="pill" id="filterCount">2 筛选</span>
