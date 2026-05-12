@@ -150,6 +150,9 @@
       .th-icons { color: #60708a; display: flex; gap: 5px; align-items: center; }
       .sorted { color: var(--blue); }
       .filtered { color: var(--green); }
+      .filter-trigger { cursor: pointer; padding: 2px 3px; border-radius: 3px; color: #60708a; }
+      .filter-trigger.filtered { color: var(--green); background: #e7f6f2; }
+      .filter-trigger:hover { background: #dde5f0; }
       .menu-trigger { cursor: pointer; padding: 2px 3px; border-radius: 3px; }
       .menu-trigger:hover { background: #dde5f0; }
       .data-grid tr:hover td { background: #f8fbff; }
@@ -890,9 +893,16 @@
           th.dataset.key = col.key;
           if (col.key.includes('_dict.')) th.classList.add('joined-col');
           th.title = `${col.name}\n${col.fullComment}\n类型：${col.type}`;
-          th.innerHTML = `<div class="th-inner"><div class="th-text"><span class="th-name">${col.name}</span><span class="th-comment">${col.comment}</span></div><span class="th-icons"><span class="${filtered ? 'filtered' : ''}">${filtered ? '⌕' : ''}</span><span class="${sort ? 'sorted' : ''}">${sort ? (sort.dir === 'DESC' ? '↓' : '↑') : ''}</span><span class="menu-trigger" data-key="${col.key}">⋮</span></span></div>`;
+          th.innerHTML = `<div class="th-inner"><div class="th-text"><span class="th-name">${col.name}</span><span class="th-comment">${col.comment}</span></div><span class="th-icons"><span class="filter-trigger ${filtered ? 'filtered' : ''}" data-filter-key="${col.key}" title="${filtered ? '已筛选，点击编辑筛选' : '按此列筛选'}">⌕</span><span class="${sort ? 'sorted' : ''}">${sort ? (sort.dir === 'DESC' ? '↓' : '↑') : ''}</span><span class="menu-trigger" data-key="${col.key}">⋮</span></span></div>`;
           th.addEventListener('click', (event) => {
-            if (event.target.classList.contains('menu-trigger')) return;
+            const filterTrigger = event.target.closest('.filter-trigger');
+            if (filterTrigger) {
+              event.stopPropagation();
+              const filterIndex = filters.findIndex(item => item.field === col.key);
+              openFilterPopover(filterTrigger, col.key, filterIndex >= 0 ? filterIndex : null);
+              return;
+            }
+            if (event.target.closest('.menu-trigger')) return;
             setSort(col.key);
           });
           head.appendChild(th);
@@ -1271,7 +1281,7 @@
       document.addEventListener('click', (event) => {
         if (!event.target.closest('#contextMenu')) $('contextMenu').classList.remove('open');
         if (!event.target.closest('.view-select-wrap')) $('viewMenu').classList.remove('open');
-        if (!event.target.closest('#filterPopover') && !event.target.closest('#sortPopover') && !event.target.closest('.add-link') && !event.target.closest('[data-edit-filter-index]') && !event.target.closest('#addFilterBtn') && !event.target.closest('#addSortBtn')) {
+        if (!event.target.closest('#filterPopover') && !event.target.closest('#sortPopover') && !event.target.closest('.add-link') && !event.target.closest('.filter-trigger') && !event.target.closest('[data-edit-filter-index]') && !event.target.closest('#addFilterBtn') && !event.target.closest('#addSortBtn')) {
           $('filterPopover').classList.remove('open');
           $('sortPopover').classList.remove('open');
         }
